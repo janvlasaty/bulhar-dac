@@ -105,6 +105,19 @@ bool bYMinus = false;
 bool bZPlus = false;
 bool bZMinus = false;
 
+// breaks
+bool sXPlus = false;
+bool sXMinus = false;
+bool sYPlus = false;
+bool sYMinus = false;
+bool sZ = false;
+
+// detectors
+bool dPrice = false;
+bool dMoney = false;
+bool hasPrice = false;
+bool hasMoney = false;
+
 // motors state
 /*
   0 = stop
@@ -141,223 +154,42 @@ void setServo(int degrees)
 // motor functions
 void setMotor(char axis, int state)
 {
+  int motorPlus = BUS_MX_PLUS;
+  int motorMinus = BUS_MX_MINUS;
+  int motorPlusValue = LOW;
+  int motorMinusValue = LOW;
   switch (axis)
   {
-  case 'x':
-    mXState = state;
-    break;
   case 'y':
-    mYState = state;
+    motorPlus = BUS_MY_PLUS;
+    motorMinus = BUS_MY_MINUS;
     break;
   case 'z':
-    mZState = state;
+    motorPlus = BUS_MZ_PLUS;
+    motorMinus = BUS_MZ_MINUS;
     break;
   }
-}
-void setMotorIfPlaying(char axis, int state)
-{
-  if (gameMode == 2)
-    setMotor(axis, state);
+
+  switch (state)
+  {
+  case 1:
+    motorPlusValue = HIGH;
+    break;
+  case 2:
+    motorMinusValue = HIGH;
+    break;
+  }
+
+  PCF_20.write(motorPlus, motorMinusValue);
+  PCF_20.write(motorMinus, motorPlusValue);
 }
 void stopMotorsXY()
 {
-  if (DEBUG)
-    Serial.println("stopMotorsXY");
-  // stop motors
   setMotor('x', 0);
   setMotor('y', 0);
 }
 
-// interrupt handlers
-void IRAM_ATTR sXPChange()
-{
-  if (digitalRead(PIN_SX_PLUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 1;
-    if (!bXPlus)
-      setMotorIfPlaying('x', 1);
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 2;
-    setMotorIfPlaying('x', 0);
-  }
-}
-void IRAM_ATTR sXMChange()
-{
-  if (digitalRead(PIN_SX_MINUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 3;
-    if (!bXMinus)
-      setMotorIfPlaying('x', 2);
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 4;
-    setMotorIfPlaying('x', 0);
-  }
-}
-void IRAM_ATTR sYPChange()
-{
-  if (digitalRead(PIN_SY_PLUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 5;
-    if (!bYPlus)
-      setMotorIfPlaying('y', 1);
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 6;
-    setMotorIfPlaying('y', 0);
-  }
-}
-void IRAM_ATTR sYMChange()
-{
-  if (digitalRead(PIN_SY_MINUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 7;
-    if (!bYMinus)
-      setMotorIfPlaying('y', 2);
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 8;
-    setMotorIfPlaying('y', 0);
-  }
-}
-void IRAM_ATTR sZChange()
-{
-  if (digitalRead(PIN_SZ) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 9;
-    if (gameMode == 2)
-      // move to craying
-      gameMode = 3;
-  }
-}
-void IRAM_ATTR bXPChange()
-{
-  if (digitalRead(PIN_BX_PLUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 10;
-    bXPlus = true;
-    setMotor('x', 0);
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 11;
-    bXPlus = false;
-  }
-}
-void IRAM_ATTR bXMChange()
-{
-  if (digitalRead(PIN_BX_MINUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 12;
-    bXMinus = true;
-    setMotor('x', 0);
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 13;
-    bXMinus = false;
-  }
-}
-void IRAM_ATTR bYPChange()
-{
-  if (digitalRead(PIN_BY_PLUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 15;
-    bYPlus = true;
-    setMotor('y', 0);
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 16;
-    bYPlus = false;
-  }
-}
-void IRAM_ATTR bYMChange()
-{
-  if (digitalRead(PIN_BY_MINUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 17;
-    bYMinus = true;
-    setMotor('y', 0);
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 18;
-    bYMinus = false;
-  }
-}
-void IRAM_ATTR bZPChange()
-{
-  if (digitalRead(PIN_BZ_PLUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 19;
-    bZPlus = true;
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 20;
-    bZPlus = false;
-  }
-}
-void IRAM_ATTR bZMChange()
-{
-  if (digitalRead(PIN_BZ_MINUS) == LOW)
-  {
-    if (DEBUG)
-      logNumber = 21;
-    bZMinus = true;
-  }
-  else
-  {
-    if (DEBUG)
-      logNumber = 22;
-    bZMinus = false;
-  }
-}
-
-void priceIRDetected()
-{
-  if (DEBUG)
-    logNumber = 23;
-  if (gameMode == 4)
-    gameMode = 5;
-}
-void moneyIRDetected()
-{
-  if (DEBUG)
-    logNumber = 24;
-  if (gameMode == 0)
-  {
-    // start a game
-    gameStartTime = millis();
-    gameMode = 1;
-  }
-}
-
+// cray functions
 void crayClose()
 {
   if (DEBUG)
@@ -380,7 +212,7 @@ void crayOpen()
   }
   delay(1000);
 }
-void crayAction()
+bool crayAction()
 {
   if (previousCrayingMode != crayingMode)
   {
@@ -393,7 +225,7 @@ void crayAction()
   case 0:
     // stop motors XY
     stopMotorsXY();
-    setMotor('z', 1);
+    setMotor('z', 2);
     crayingMode = 1;
     break;
   case 1:
@@ -407,7 +239,7 @@ void crayAction()
   case 2:
     // craying
     crayClose();
-    setMotor('z', 2);
+    setMotor('z', 1);
     crayingMode = 3;
     break;
   case 3:
@@ -425,12 +257,13 @@ void crayAction()
     // moving over the hole
     if (bXMinus == true && bYMinus == true)
     {
+      stopMotorsXY();
       crayingMode = 0;
-      gameMode = 4;
-      return;
+      return false;
     }
     break;
   }
+  return true;
 }
 
 // sound timer
@@ -513,6 +346,32 @@ void IRAM_ATTR onTimerLeds()
   }
 }
 
+hw_timer_t *timerSwitch = NULL;
+void IRAM_ATTR onSwitch()
+{
+  bXMinus = digitalRead(PIN_BX_MINUS) == LOW;
+  bXPlus = digitalRead(PIN_BX_PLUS) == LOW;
+  bYMinus = digitalRead(PIN_BY_MINUS) == LOW;
+  bYPlus = digitalRead(PIN_BY_PLUS) == LOW;
+  bZMinus = digitalRead(PIN_BZ_MINUS) == LOW;
+  bZPlus = digitalRead(PIN_BZ_PLUS) == LOW;
+  sXPlus = digitalRead(PIN_SX_PLUS) == LOW;
+  sXMinus = digitalRead(PIN_SX_MINUS) == LOW;
+  sYPlus = digitalRead(PIN_SY_PLUS) == LOW;
+  sYMinus = digitalRead(PIN_SY_MINUS) == LOW;
+  sZ = digitalRead(PIN_SZ) == LOW;
+  dPrice = digitalRead(PRICE_IR) == HIGH;
+  if (dPrice)
+  {
+    hasPrice = true;
+  }
+  dMoney = digitalRead(MONEY_IR) == HIGH;
+  if (dMoney)
+  {
+    hasMoney = true;
+  }
+}
+
 // dummy delay
 unsigned long delayStart;
 int delayDuration = 5000;
@@ -541,37 +400,37 @@ void setupPins()
 
   // sx+
   pinMode(PIN_SX_PLUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_SX_PLUS), sXPChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_SX_PLUS), sXPChange, CHANGE);
   // sx-
   pinMode(PIN_SX_MINUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_SX_MINUS), sXMChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_SX_MINUS), sXMChange, CHANGE);
   // sy+
   pinMode(PIN_SY_PLUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_SY_PLUS), sYPChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_SY_PLUS), sYPChange, CHANGE);
   // sy-
   pinMode(PIN_SY_MINUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_SY_MINUS), sYMChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_SY_MINUS), sYMChange, CHANGE);
   // sz
   pinMode(PIN_SZ, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_SZ), sZChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_SZ), sZChange, CHANGE);
   // bx+
   pinMode(PIN_BX_PLUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_BX_PLUS), bXPChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_BX_PLUS), bXPChange, CHANGE);
   // bx-
   pinMode(PIN_BX_MINUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_BX_MINUS), bXMChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_BX_MINUS), bXMChange, CHANGE);
   // by+
   pinMode(PIN_BY_PLUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_BY_PLUS), bYPChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_BY_PLUS), bYPChange, CHANGE);
   // by-
   pinMode(PIN_BY_MINUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_BY_MINUS), bYMChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_BY_MINUS), bYMChange, CHANGE);
   // bz+
   pinMode(PIN_BZ_PLUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_BZ_PLUS), bZPChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_BZ_PLUS), bZPChange, CHANGE);
   // bz-
   pinMode(PIN_BZ_MINUS, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PIN_BZ_MINUS), bZMChange, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_BZ_MINUS), bZMChange, CHANGE);
 
   // // set pinout motors
   // pinMode(PIN_MX_PLUS, OUTPUT);
@@ -589,9 +448,9 @@ void setupPins()
 
   // // set pinout IR
   pinMode(PRICE_IR, INPUT_PULLDOWN);
-  attachInterrupt(PRICE_IR, priceIRDetected, RISING);
+  // attachInterrupt(PRICE_IR, priceIRDetected, RISING);
   pinMode(MONEY_IR, INPUT_PULLDOWN);
-  attachInterrupt(MONEY_IR, moneyIRDetected, RISING);
+  // attachInterrupt(MONEY_IR, moneyIRDetected, RISING);
 }
 
 void setup()
@@ -623,10 +482,16 @@ void setup()
     leds[i] = CRGB::Red;
   }
   FastLED.show();
+
   timerLeds = timerBegin(1, 80, true);
   timerAttachInterrupt(timerLeds, &onTimerLeds, true);
   timerAlarmWrite(timerLeds, 1000000, true);
   timerAlarmEnable(timerLeds);
+
+  timerSwitch = timerBegin(2, 80, true);
+  timerAttachInterrupt(timerSwitch, &onSwitch, true);
+  timerAlarmWrite(timerSwitch, 1000, true);
+  timerAlarmEnable(timerSwitch);
 
   Serial.println("Cray open");
   crayOpen();
@@ -704,6 +569,36 @@ void loopMotors()
     previousMZState = mZState;
   }
 }
+
+void loopPlaying()
+{
+  if (sXPlus && !bXPlus)
+  {
+    mXState = 1;
+  }
+  if (sXMinus && !bXMinus)
+  {
+    mXState = 2;
+  }
+  if (sYPlus && !bYPlus)
+  {
+    mYState = 1;
+  }
+  if (sYMinus && !bYMinus)
+  {
+    mYState = 2;
+  }
+  if (mXState != 0 && mXState != previousMXState)
+  {
+    previousMXState = mXState;
+    setMotor('x', mXState);
+  }
+  if (mYState != 0 && mYState != previousMYState)
+  {
+    previousMYState = mYState;
+    setMotor('y', mYState);
+  }
+}
 void loopGameMode()
 {
   bool isNewGameMode = false;
@@ -719,9 +614,14 @@ void loopGameMode()
   case 0:
     if (isNewGameMode)
     {
+      hasMoney = false;
       playSound(0, true);
     }
-    // off
+    // waiting for money
+    if (hasMoney)
+    {
+      gameMode = 1;
+    }
     break;
   case 1:
     if (isNewGameMode)
@@ -739,9 +639,12 @@ void loopGameMode()
     {
       playSound(6, true);
     }
+    loopPlaying();
     startDummyDelay(gameDuration);
-    if (!delayOn)
+    if (!delayOn || sZ)
+    {
       gameMode = 3;
+    }
     break;
   case 3:
     if (isNewGameMode)
@@ -749,13 +652,20 @@ void loopGameMode()
       playSound(4, true);
     }
     // craying
-    crayAction();
+    if (!crayAction())
+    {
+      gameMode = 4;
+    }
     break;
   case 4:
     // releasing cray & game resolution
+    hasPrice = false;
     crayOpen();
-    if (gameMode != 5)
+    startDummyDelay(1000);
+    if (hasPrice = true)
       gameMode = 6;
+    if (!delayOn)
+      gameMode = 5;
     break;
   case 5:
     // win
@@ -764,7 +674,7 @@ void loopGameMode()
       playSound(7, false);
     }
     // playSound(0);
-    startDummyDelay(10000);
+    startDummyDelay(5000);
     if (!delayOn)
       gameMode = 0;
     break;
@@ -774,7 +684,7 @@ void loopGameMode()
     {
       playSound(3, false);
     }
-    startDummyDelay(10000);
+    startDummyDelay(5000);
     if (!delayOn)
       gameMode = 0;
     break;
@@ -788,9 +698,6 @@ void loop()
 
   // debug
   loopDebug();
-
-  // set motors
-  loopMotors();
 
   // print gameMode
   loopGameMode();
