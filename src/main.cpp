@@ -95,7 +95,7 @@ int gameMode = 0;
 int previousGameMode = -2;
 uint32_t gameStartTime = 0;
 int gameDuration = 7000;           // ms
-int gameResolutionDuration = 1000; // ms
+int gameResolutionDuration = 3000; // ms
 int gameEndDuration = 5000;        // ms
 
 // breaks
@@ -530,17 +530,6 @@ void setup()
 
   Serial.println("Cray open");
   crayOpen();
-
-  while (!bZPlus)
-  {
-    mZState = 1;
-    if (mZState != previousMZState)
-    {
-      previousMZState = mZState;
-      setMotor('z', mZState);
-    }
-  }
-  setMotor('z', 0);
 }
 
 void loopLeds()
@@ -672,6 +661,19 @@ void loopGameMode()
     {
       hasMoney = false;
       playSound(0, true);
+
+      while (!bZPlus)
+      {
+        mZState = 1;
+        if (mZState != previousMZState)
+        {
+          previousMZState = mZState;
+          setMotor('z', mZState);
+        }
+      }
+      mZState = 0;
+      previousMZState = mZState;
+      setMotor('z', 0);
     }
     // waiting for money
     if (hasMoney)
