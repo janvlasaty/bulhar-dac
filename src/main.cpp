@@ -24,28 +24,28 @@
   GPIO 32       [ sy+                 ]  GND
   GPIO 33       [ sy-            bx+  ]  GPIO 19
   GPIO 25 dac   [ sound          bx-  ]  GPIO 18
-  GPIO 26 dac   [ sx+            by+  ]  GPIO 5
-  GPIO 27       [                by-  ]  GPIO 17
+  GPIO 26 dac   [ sx-            by-  ]  GPIO 5
+  GPIO 27       [                by+  ]  GPIO 17
   GPIO 14       [                bz+  ]  GPIO 16
   GPIO 12       [                bz-  ]  GPIO 4
   GND           [              servo  ]  GPIO 0
   GPIO 13       [                led  ]  GPIO 2
-  x             [                sx-  ]  GPIO 15
+  x             [                sx+  ]  GPIO 15
   x             [                     ]  x
   x             [                     ]  x
   5V            [                     ]  x
 */
 // define switch inputs
-#define PIN_SX_PLUS 26
-#define PIN_SX_MINUS 15
+#define PIN_SX_PLUS 15
+#define PIN_SX_MINUS 26
 #define PIN_SY_PLUS 33
 #define PIN_SY_MINUS 32
 #define PIN_SZ 23
 // define break inputs
 #define PIN_BX_PLUS 19
 #define PIN_BX_MINUS 18
-#define PIN_BY_PLUS 5
-#define PIN_BY_MINUS 17
+#define PIN_BY_PLUS 17
+#define PIN_BY_MINUS 5
 #define PIN_BZ_PLUS 16
 #define PIN_BZ_MINUS 4
 // define IR inputs
@@ -92,10 +92,11 @@ PCF8574 PCF_20(0x20);
   6 = lose
 */
 int gameMode = 0;
-int previousGameMode = -1;
+int previousGameMode = -2;
 uint32_t gameStartTime = 0;
-int gameDuration = 60000;          // ms
+int gameDuration = 7000;           // ms
 int gameResolutionDuration = 1000; // ms
+int gameEndDuration = 5000;        // ms
 
 // breaks
 bool bXPlus = false;
@@ -160,6 +161,8 @@ void setMotor(char axis, int state)
   int motorMinusValue = LOW;
   switch (axis)
   {
+  case 'x':
+    break;
   case 'y':
     motorPlus = BUS_MY_PLUS;
     motorMinus = BUS_MY_MINUS;
@@ -172,6 +175,8 @@ void setMotor(char axis, int state)
 
   switch (state)
   {
+  case 0:
+    break;
   case 1:
     motorPlusValue = HIGH;
     break;
@@ -180,8 +185,8 @@ void setMotor(char axis, int state)
     break;
   }
 
-  PCF_20.write(motorPlus, motorMinusValue);
-  PCF_20.write(motorMinus, motorPlusValue);
+  PCF_20.write(motorPlus, motorPlusValue);
+  PCF_20.write(motorMinus, motorMinusValue);
 }
 void stopMotorsXY()
 {
@@ -248,18 +253,30 @@ bool crayAction()
     {
       // stop Z motor and start XY motors
       setMotor('z', 0);
-      setMotor('x', 1);
-      setMotor('y', 1);
+      mXState = 2;
+      setMotor('x', mXState);
+      mYState = 1;
+      setMotor('y', mYState);
       crayingMode = 4;
     }
     break;
   case 4:
     // moving over the hole
-    if (bXMinus == true && bYMinus == true)
+    if (mXState == 0 && mYState == 0)
     {
       stopMotorsXY();
       crayingMode = 0;
       return false;
+    }
+    if (bXMinus == true)
+    {
+      mXState = 0;
+      setMotor('x', mXState);
+    }
+    if (bYPlus == true)
+    {
+      mYState = 0;
+      setMotor('y', mYState);
     }
     break;
   }
@@ -280,27 +297,27 @@ void IRAM_ATTR onTimerSound()
     switch (trackIndex)
     {
     case 0:
-      dacWrite(PIN_SOUND, acc_sound[soundIndex] / 64);
+      dacWrite(PIN_SOUND, acc_sound[soundIndex] / 128);
       soundLength = acc_sound_length;
       break;
     case 3:
-      dacWrite(PIN_SOUND, pacman_fail[soundIndex] / 64);
+      dacWrite(PIN_SOUND, pacman_fail[soundIndex] / 32);
       soundLength = pacman_fail_length;
       break;
     case 4:
-      dacWrite(PIN_SOUND, pacman_sirene[soundIndex] / 64);
+      dacWrite(PIN_SOUND, pacman_sirene[soundIndex] / 32);
       soundLength = pacman_sirene_length;
       break;
     case 5:
-      dacWrite(PIN_SOUND, pacman_intro[soundIndex] / 64);
+      dacWrite(PIN_SOUND, pacman_intro[soundIndex] / 32);
       soundLength = pacman_intro_length;
       break;
     case 6:
-      dacWrite(PIN_SOUND, pacman_steps[soundIndex] / 128);
+      dacWrite(PIN_SOUND, pacman_steps[soundIndex] / 32);
       soundLength = pacman_steps_length;
       break;
     case 7:
-      dacWrite(PIN_SOUND, sound_success[soundIndex] / 64);
+      dacWrite(PIN_SOUND, sound_success[soundIndex] / 32);
       soundLength = sound_success_length;
       break;
     }
@@ -328,22 +345,40 @@ CRGB leds[NUM_LEDS];
 int ledIndex = 0;
 unsigned long lastLedShow = millis();
 int ledShowInterval = 50;
+int animBlinkMin = 13;
+int animBlinkMax = 49;
+int animWhiteMin = 0;
+int animWhiteMax = 12;
 hw_timer_t *timerLeds = NULL;
 void IRAM_ATTR onTimerLeds()
 {
-  if (ledIndex < NUM_LEDS)
+  if (ledIndex <= animBlinkMax)
   {
-    for (int i = 0; i < NUM_LEDS; i++)
+    for (int i = animBlinkMin; i < NUM_LEDS; i++)
     {
-      leds[i] = CRGB::Black;
+      leds[i] = CRGB::White;
     }
-    leds[ledIndex] = CRGB::Green;
-    ledIndex++;
+    // leds[ledIndex] = CRGB::Green;
+    // ledIndex++;
   }
-  if (ledIndex >= NUM_LEDS)
+  if (ledIndex > animBlinkMax)
   {
-    ledIndex = 0;
+    ledIndex = animBlinkMin;
   }
+
+  leds[0] = bXMinus ? CRGB::Green : CRGB::Red;
+  leds[1] = bXPlus ? CRGB::Green : CRGB::Red;
+  leds[2] = bYMinus ? CRGB::Green : CRGB::Red;
+  leds[3] = bYPlus ? CRGB::Green : CRGB::Red;
+  leds[4] = bZMinus ? CRGB::Green : CRGB::Red;
+  leds[5] = bZPlus ? CRGB::Green : CRGB::Red;
+  leds[6] = sXPlus ? CRGB::Green : CRGB::Red;
+  leds[7] = sXMinus ? CRGB::Green : CRGB::Red;
+  leds[8] = sYPlus ? CRGB::Green : CRGB::Red;
+  leds[9] = sYMinus ? CRGB::Green : CRGB::Red;
+  leds[10] = sZ ? CRGB::Green : CRGB::Red;
+  leds[11] = dPrice ? CRGB::Green : CRGB::Red;
+  leds[12] = dMoney ? CRGB::Green : CRGB::Red;
 }
 
 hw_timer_t *timerSwitch = NULL;
@@ -485,7 +520,7 @@ void setup()
 
   timerLeds = timerBegin(1, 80, true);
   timerAttachInterrupt(timerLeds, &onTimerLeds, true);
-  timerAlarmWrite(timerLeds, 1000000, true);
+  timerAlarmWrite(timerLeds, 10000, true);
   timerAlarmEnable(timerLeds);
 
   timerSwitch = timerBegin(2, 80, true);
@@ -495,6 +530,17 @@ void setup()
 
   Serial.println("Cray open");
   crayOpen();
+
+  while (!bZPlus)
+  {
+    mZState = 1;
+    if (mZState != previousMZState)
+    {
+      previousMZState = mZState;
+      setMotor('z', mZState);
+    }
+  }
+  setMotor('z', 0);
 }
 
 void loopLeds()
@@ -520,58 +566,54 @@ void loopDebug()
     }
   }
 }
-void loopMotors()
-{
-  if (mXState != previousMXState)
-  {
-    Serial.printf("mXState: %i\n", mXState);
-    PCF_20.write(BUS_MX_PLUS, LOW);
-    PCF_20.write(BUS_MX_MINUS, LOW);
-    switch (mXState)
-    {
-    case 1:
-      PCF_20.write(BUS_MX_PLUS, HIGH);
-      break;
-    case 2:
-      PCF_20.write(BUS_MX_MINUS, HIGH);
-      break;
-    }
-    previousMXState = mXState;
-  }
-  if (mYState != previousMYState)
-  {
-    PCF_20.write(BUS_MY_PLUS, LOW);
-    PCF_20.write(BUS_MY_MINUS, LOW);
-    switch (mYState)
-    {
-    case 1:
-      PCF_20.write(BUS_MY_PLUS, HIGH);
-      break;
-    case 2:
-      PCF_20.write(BUS_MY_MINUS, HIGH);
-      break;
-    }
-    previousMYState = mYState;
-  }
-  if (mZState != previousMZState)
-  {
-    PCF_20.write(BUS_MZ_PLUS, LOW);
-    PCF_20.write(BUS_MZ_MINUS, LOW);
-    switch (mZState)
-    {
-    case 1:
-      PCF_20.write(BUS_MZ_PLUS, HIGH);
-      break;
-    case 2:
-      PCF_20.write(BUS_MZ_MINUS, HIGH);
-      break;
-    }
-    previousMZState = mZState;
-  }
-}
 
+bool loopDemo()
+{
+  Serial.println("Demo");
+  Serial.println("X");
+  delay(10000);
+  Serial.println("X1");
+  setMotor('x', 1);
+  delay(10000);
+  Serial.println("X2");
+  setMotor('x', 2);
+  Serial.println("X0");
+  delay(10000);
+  setMotor('x', 0);
+
+  Serial.println("Y");
+  delay(10000);
+
+  Serial.println("Y1");
+  setMotor('y', 1);
+  delay(10000);
+  Serial.println("Y2");
+  setMotor('y', 2);
+  delay(10000);
+  Serial.println("Y0");
+  setMotor('y', 0);
+  delay(10000);
+
+  Serial.println("Z");
+  setMotor('z', 1);
+  delay(3000);
+  setMotor('z', 2);
+  delay(3000);
+  setMotor('z', 0);
+
+  delay(10000);
+  Serial.println("cray");
+
+  Serial.println("end");
+  delay(10000);
+  return true;
+}
 void loopPlaying()
 {
+  if (!sXPlus || !sXMinus)
+  {
+    mXState = 0;
+  }
   if (sXPlus && !bXPlus)
   {
     mXState = 1;
@@ -579,6 +621,11 @@ void loopPlaying()
   if (sXMinus && !bXMinus)
   {
     mXState = 2;
+  }
+
+  if (!sYPlus || !sYMinus)
+  {
+    mYState = 0;
   }
   if (sYPlus && !bYPlus)
   {
@@ -588,13 +635,15 @@ void loopPlaying()
   {
     mYState = 2;
   }
-  if (mXState != 0 && mXState != previousMXState)
+  if (mXState != previousMXState)
   {
+    Serial.printf("mXState: %i\n", mXState);
     previousMXState = mXState;
     setMotor('x', mXState);
   }
-  if (mYState != 0 && mYState != previousMYState)
+  if (mYState != previousMYState)
   {
+    Serial.printf("mYState: %i\n", mYState);
     previousMYState = mYState;
     setMotor('y', mYState);
   }
@@ -611,6 +660,13 @@ void loopGameMode()
   }
   switch (gameMode)
   {
+  case -1:
+    if (isNewGameMode)
+    {
+      // loopDemo();
+    }
+    loopPlaying();
+    break;
   case 0:
     if (isNewGameMode)
     {
@@ -632,6 +688,7 @@ void loopGameMode()
     startDummyDelay(5000);
     if (!delayOn)
       gameMode = 2;
+    stopMotorsXY();
     break;
   case 2:
     // playing
@@ -650,6 +707,7 @@ void loopGameMode()
     if (isNewGameMode)
     {
       playSound(4, true);
+      hasPrice = false;
     }
     // craying
     if (!crayAction())
@@ -659,9 +717,11 @@ void loopGameMode()
     break;
   case 4:
     // releasing cray & game resolution
-    hasPrice = false;
-    crayOpen();
-    startDummyDelay(1000);
+    if (isNewGameMode)
+    {
+      crayOpen();
+    }
+    startDummyDelay(gameResolutionDuration);
     if (hasPrice = true)
       gameMode = 6;
     if (!delayOn)
@@ -674,7 +734,7 @@ void loopGameMode()
       playSound(7, false);
     }
     // playSound(0);
-    startDummyDelay(5000);
+    startDummyDelay(gameEndDuration);
     if (!delayOn)
       gameMode = 0;
     break;
@@ -684,7 +744,7 @@ void loopGameMode()
     {
       playSound(3, false);
     }
-    startDummyDelay(5000);
+    startDummyDelay(gameEndDuration);
     if (!delayOn)
       gameMode = 0;
     break;
@@ -697,7 +757,7 @@ void loop()
   loopLeds();
 
   // debug
-  loopDebug();
+  // loopDebug();
 
   // print gameMode
   loopGameMode();
