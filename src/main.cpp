@@ -62,6 +62,8 @@
 #define BUS_MZ_PLUS 4
 #define BUS_MZ_MINUS 5
 
+#define PIN_LONGER 27
+
 // define motor outputs
 // #define PIN_MX_PLUS 27
 // #define PIN_MX_MINUS 14
@@ -94,7 +96,7 @@ PCF8574 PCF_20(0x20);
 int gameMode = 0;
 int previousGameMode = -2;
 uint32_t gameStartTime = 0;
-int gameDuration = 7000;           // ms
+int gameDuration = 8000;           // ms
 int gameResolutionDuration = 3000; // ms
 int gameEndDuration = 5000;        // ms
 
@@ -118,6 +120,7 @@ bool dPrice = false;
 bool dMoney = false;
 bool hasPrice = false;
 bool hasMoney = false;
+bool pinLonger = false;
 
 // motors state
 /*
@@ -130,7 +133,7 @@ int previousMXState = 0;
 int mYState = 0;
 int previousMYState = 0;
 int mZState = 0;
-int previousMZState = 0;
+int previousMZState = 1;
 
 // craying
 /*
@@ -297,7 +300,7 @@ void IRAM_ATTR onTimerSound()
     switch (trackIndex)
     {
     case 0:
-      dacWrite(PIN_SOUND, acc_sound[soundIndex] / 128);
+      dacWrite(PIN_SOUND, acc_sound[soundIndex] / 64);
       soundLength = acc_sound_length;
       break;
     case 3:
@@ -305,7 +308,7 @@ void IRAM_ATTR onTimerSound()
       soundLength = pacman_fail_length;
       break;
     case 4:
-      dacWrite(PIN_SOUND, pacman_sirene[soundIndex] / 32);
+      dacWrite(PIN_SOUND, pacman_sirene[soundIndex] / 64);
       soundLength = pacman_sirene_length;
       break;
     case 5:
@@ -345,40 +348,266 @@ CRGB leds[NUM_LEDS];
 int ledIndex = 0;
 unsigned long lastLedShow = millis();
 int ledShowInterval = 50;
-int animBlinkMin = 13;
-int animBlinkMax = 49;
+
+bool animWhiteEnable = true;
 int animWhiteMin = 0;
-int animWhiteMax = 12;
+int animWhiteMax = 49;
+int animWhiteKeyframe = 0;
+int animWhitePeriod = 500;
+unsigned long animWhiteStart = millis();
+
+bool animBeginEnable = false;
+int animBeginMin = 0;
+int animBeginMax = 49;
+int animBeginKeyframe = 0;
+int animBeginPeriod = 100;
+unsigned long animBeginStart = millis();
+
+bool animGameEnable = false;
+int animGameMin = 0;
+int animGameMax = 49;
+int animGameKeyframe = 0;
+int animGamePeriod = 1000;
+unsigned long animGameStart = millis();
+
+bool animEndEnable = false;
+
 hw_timer_t *timerLeds = NULL;
 void IRAM_ATTR onTimerLeds()
 {
-  if (ledIndex <= animBlinkMax)
+  unsigned int now = millis();
+  if (animWhiteEnable)
   {
-    for (int i = animBlinkMin; i < NUM_LEDS; i++)
+    if (now - animWhiteStart > animWhitePeriod)
     {
-      leds[i] = CRGB::White;
+      switch (animWhiteKeyframe)
+      {
+      case 0:
+        for (int i = animWhiteMin; i <= animWhiteMax; i++)
+        {
+          leds[i] = (i % 2 == 0) ? CRGB::Black : CRGB::White;
+        }
+        animWhiteKeyframe++;
+        break;
+      case 1:
+        for (int i = animWhiteMin; i <= animWhiteMax; i++)
+        {
+          leds[i] = (i % 2 == 1) ? CRGB::Black : CRGB::White;
+        }
+        animWhiteKeyframe = 0;
+        break;
+      }
+      animWhiteStart = now;
     }
-    // leds[ledIndex] = CRGB::Green;
-    // ledIndex++;
-  }
-  if (ledIndex > animBlinkMax)
-  {
-    ledIndex = animBlinkMin;
   }
 
-  leds[0] = bXMinus ? CRGB::Green : CRGB::Red;
-  leds[1] = bXPlus ? CRGB::Green : CRGB::Red;
-  leds[2] = bYMinus ? CRGB::Green : CRGB::Red;
-  leds[3] = bYPlus ? CRGB::Green : CRGB::Red;
-  leds[4] = bZMinus ? CRGB::Green : CRGB::Red;
-  leds[5] = bZPlus ? CRGB::Green : CRGB::Red;
-  leds[6] = sXPlus ? CRGB::Green : CRGB::Red;
-  leds[7] = sXMinus ? CRGB::Green : CRGB::Red;
-  leds[8] = sYPlus ? CRGB::Green : CRGB::Red;
-  leds[9] = sYMinus ? CRGB::Green : CRGB::Red;
-  leds[10] = sZ ? CRGB::Green : CRGB::Red;
-  leds[11] = dPrice ? CRGB::Green : CRGB::Red;
-  leds[12] = dMoney ? CRGB::Green : CRGB::Red;
+  if (animBeginEnable)
+  {
+    if (now - animBeginStart > animBeginPeriod)
+    {
+      switch (animBeginKeyframe)
+      {
+      case 0:
+        for (int i = animBeginMin; i <= animBeginMax; i++)
+        {
+          leds[i] = CRGB::Black;
+        }
+        animBeginKeyframe++;
+        break;
+      case 1:
+        for (int i = animBeginMin; i <= animBeginMax; i++)
+        {
+          leds[i] = CRGB::Green;
+        }
+        animBeginKeyframe = 0;
+        break;
+      }
+      animBeginStart = now;
+    }
+  }
+
+  if (animGameEnable)
+  {
+    // 10 - 16 desc
+    // 24 - 31 asc
+    if (now - animGameStart > animGamePeriod)
+    {
+      for (int i = animGameMin; i <= animGameMax; i++)
+      {
+        leds[i] = CRGB::White;
+      }
+      switch (animGameKeyframe)
+      {
+      case 0:
+        leds[10] = CRGB::Red;
+        leds[11] = CRGB::Red;
+        leds[12] = CRGB::Red;
+        leds[13] = CRGB::Red;
+        leds[14] = CRGB::Red;
+        leds[15] = CRGB::Red;
+        leds[16] = CRGB::Red;
+        leds[31] = CRGB::Red;
+        leds[30] = CRGB::Red;
+        leds[29] = CRGB::Red;
+        leds[28] = CRGB::Red;
+        leds[27] = CRGB::Red;
+        leds[26] = CRGB::Red;
+        leds[25] = CRGB::Red;
+        leds[24] = CRGB::Red;
+        animGameKeyframe++;
+        break;
+      case 1:
+        leds[10] = CRGB::Black;
+        leds[11] = CRGB::Red;
+        leds[12] = CRGB::Red;
+        leds[13] = CRGB::Red;
+        leds[14] = CRGB::Red;
+        leds[15] = CRGB::Red;
+        leds[16] = CRGB::Red;
+        leds[31] = CRGB::Black;
+        leds[30] = CRGB::Red;
+        leds[29] = CRGB::Red;
+        leds[28] = CRGB::Red;
+        leds[27] = CRGB::Red;
+        leds[26] = CRGB::Red;
+        leds[25] = CRGB::Red;
+        leds[24] = CRGB::Red;
+        animGameKeyframe++;
+        break;
+      case 2:
+        leds[10] = CRGB::Black;
+        leds[11] = CRGB::Black;
+        leds[12] = CRGB::Red;
+        leds[13] = CRGB::Red;
+        leds[14] = CRGB::Red;
+        leds[15] = CRGB::Red;
+        leds[16] = CRGB::Red;
+        leds[31] = CRGB::Black;
+        leds[30] = CRGB::Black;
+        leds[29] = CRGB::Red;
+        leds[28] = CRGB::Red;
+        leds[27] = CRGB::Red;
+        leds[26] = CRGB::Red;
+        leds[25] = CRGB::Red;
+        leds[24] = CRGB::Red;
+        animGameKeyframe++;
+        break;
+      case 3:
+        leds[10] = CRGB::Black;
+        leds[11] = CRGB::Black;
+        leds[12] = CRGB::Black;
+        leds[13] = CRGB::Red;
+        leds[14] = CRGB::Red;
+        leds[15] = CRGB::Red;
+        leds[16] = CRGB::Red;
+        leds[31] = CRGB::Black;
+        leds[30] = CRGB::Black;
+        leds[29] = CRGB::Black;
+        leds[28] = CRGB::Red;
+        leds[27] = CRGB::Red;
+        leds[26] = CRGB::Red;
+        leds[25] = CRGB::Red;
+        leds[24] = CRGB::Red;
+        animGameKeyframe++;
+        break;
+      case 4:
+        leds[10] = CRGB::Black;
+        leds[11] = CRGB::Black;
+        leds[12] = CRGB::Black;
+        leds[13] = CRGB::Black;
+        leds[14] = CRGB::Red;
+        leds[15] = CRGB::Red;
+        leds[16] = CRGB::Red;
+        leds[31] = CRGB::Black;
+        leds[30] = CRGB::Black;
+        leds[29] = CRGB::Black;
+        leds[28] = CRGB::Black;
+        leds[27] = CRGB::Red;
+        leds[26] = CRGB::Red;
+        leds[25] = CRGB::Red;
+        leds[24] = CRGB::Red;
+        animGameKeyframe++;
+        break;
+      case 5:
+        leds[10] = CRGB::Black;
+        leds[11] = CRGB::Black;
+        leds[12] = CRGB::Black;
+        leds[13] = CRGB::Black;
+        leds[14] = CRGB::Black;
+        leds[15] = CRGB::Red;
+        leds[16] = CRGB::Red;
+        leds[31] = CRGB::Black;
+        leds[30] = CRGB::Black;
+        leds[29] = CRGB::Black;
+        leds[28] = CRGB::Black;
+        leds[27] = CRGB::Black;
+        leds[26] = CRGB::Red;
+        leds[25] = CRGB::Red;
+        leds[24] = CRGB::Red;
+        animGameKeyframe++;
+        break;
+      case 6:
+        leds[10] = CRGB::Black;
+        leds[11] = CRGB::Black;
+        leds[12] = CRGB::Black;
+        leds[13] = CRGB::Black;
+        leds[14] = CRGB::Black;
+        leds[15] = CRGB::Red;
+        leds[16] = CRGB::Red;
+        leds[31] = CRGB::Black;
+        leds[30] = CRGB::Black;
+        leds[29] = CRGB::Black;
+        leds[28] = CRGB::Black;
+        leds[27] = CRGB::Black;
+        leds[26] = CRGB::Black;
+        leds[25] = CRGB::Red;
+        leds[24] = CRGB::Red;
+        animGameKeyframe++;
+        break;
+      case 7:
+        leds[10] = CRGB::Black;
+        leds[11] = CRGB::Black;
+        leds[12] = CRGB::Black;
+        leds[13] = CRGB::Black;
+        leds[14] = CRGB::Black;
+        leds[15] = CRGB::Black;
+        leds[16] = CRGB::Red;
+        leds[31] = CRGB::Black;
+        leds[30] = CRGB::Black;
+        leds[29] = CRGB::Black;
+        leds[28] = CRGB::Black;
+        leds[27] = CRGB::Black;
+        leds[26] = CRGB::Black;
+        leds[25] = CRGB::Black;
+        leds[24] = CRGB::Red;
+        animGameKeyframe = 0;
+        break;
+      }
+      animGameStart = now;
+    }
+  }
+
+  if (animEndEnable)
+  {
+    for (int i = animGameMin; i <= animGameMax; i++)
+    {
+      leds[i] = CRGB::Black;
+    }
+  }
+
+  // leds[0] = bXMinus ? CRGB::Green : CRGB::Red;
+  // leds[1] = bXPlus ? CRGB::Green : CRGB::Red;
+  // leds[2] = bYMinus ? CRGB::Green : CRGB::Red;
+  // leds[3] = bYPlus ? CRGB::Green : CRGB::Red;
+  // leds[4] = bZMinus ? CRGB::Green : CRGB::Red;
+  // leds[5] = bZPlus ? CRGB::Green : CRGB::Red;
+  // leds[6] = sXPlus ? CRGB::Green : CRGB::Red;
+  // leds[7] = sXMinus ? CRGB::Green : CRGB::Red;
+  // leds[8] = sYPlus ? CRGB::Green : CRGB::Red;
+  // leds[9] = sYMinus ? CRGB::Green : CRGB::Red;
+  // leds[10] = sZ ? CRGB::Green : CRGB::Red;
+  // leds[11] = dPrice ? CRGB::Green : CRGB::Red;
+  // leds[12] = dMoney ? CRGB::Green : CRGB::Red;
 }
 
 hw_timer_t *timerSwitch = NULL;
@@ -405,6 +634,7 @@ void IRAM_ATTR onSwitch()
   {
     hasMoney = true;
   }
+  pinLonger = digitalRead(PIN_LONGER) == LOW;
 }
 
 // dummy delay
@@ -427,6 +657,8 @@ void startDummyDelay(int duration)
     delayOn = true;
   }
 }
+
+bool firstRun = true;
 
 // setup pins
 void setupPins()
@@ -486,6 +718,8 @@ void setupPins()
   // attachInterrupt(PRICE_IR, priceIRDetected, RISING);
   pinMode(MONEY_IR, INPUT_PULLDOWN);
   // attachInterrupt(MONEY_IR, moneyIRDetected, RISING);
+
+  pinMode(PIN_LONGER, INPUT_PULLUP);
 }
 
 void setup()
@@ -659,21 +893,10 @@ void loopGameMode()
   case 0:
     if (isNewGameMode)
     {
+      animGameEnable = false;
+      animWhiteEnable = true;
       hasMoney = false;
       playSound(0, true);
-
-      while (!bZPlus)
-      {
-        mZState = 1;
-        if (mZState != previousMZState)
-        {
-          previousMZState = mZState;
-          setMotor('z', mZState);
-        }
-      }
-      mZState = 0;
-      previousMZState = mZState;
-      setMotor('z', 0);
     }
     // waiting for money
     if (hasMoney)
@@ -684,6 +907,8 @@ void loopGameMode()
   case 1:
     if (isNewGameMode)
     {
+      animWhiteEnable = false;
+      animBeginEnable = true;
       playSound(5, false);
     }
     // preparing
@@ -696,6 +921,8 @@ void loopGameMode()
     // playing
     if (isNewGameMode)
     {
+      animBeginEnable = false;
+      animGameEnable = true;
       playSound(6, true);
     }
     loopPlaying();
@@ -755,12 +982,42 @@ void loopGameMode()
 
 void loop()
 {
-  // led show
-  loopLeds();
+  if (firstRun)
+  {
 
-  // debug
-  // loopDebug();
+    // Serial.print("first run");
+    if (!bZPlus)
+    {
+      if (mZState != previousMZState)
+      {
+        mZState = 1;
+        Serial.print("mz up");
+        previousMZState = mZState;
+        setMotor('z', mZState);
+      }
+    }
+    else
+    {
+      Serial.print("mz end");
+      mZState = 0;
+      previousMZState = mZState;
+      setMotor('z', mZState);
+      firstRun = false;
 
-  // print gameMode
-  loopGameMode();
+      gameDuration = pinLonger ? 12000 : 8000;
+      Serial.printf("diration %i", gameDuration);
+    }
+  }
+  else
+  {
+
+    // led show
+    loopLeds();
+
+    // debug
+    // loopDebug();
+
+    // print gameMode
+    loopGameMode();
+  }
 }
